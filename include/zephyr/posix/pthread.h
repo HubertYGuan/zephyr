@@ -551,6 +551,10 @@ int pthread_spin_unlock(pthread_spinlock_t *lock);
 
 #endif
 
+#ifdef CONFIG_SHARED_MULTI_HEAP
+int pthread_attr_setinsmh(pthread_attr_t *_attr);
+#endif
+
 #ifdef __cplusplus
 }
 #endif

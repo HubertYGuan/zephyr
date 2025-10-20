@@ -20,6 +20,9 @@
 #include <zephyr/sys/sem.h>
 #include <zephyr/sys/slist.h>
 #include <zephyr/sys/util.h>
+#ifdef CONFIG_SHARED_MULTI_HEAP
+#include <zephyr/multi_heap/shared_multi_heap.h>
+#endif
 
 #define ZEPHYR_TO_POSIX_PRIORITY(_zprio)                                                           \
 	(((_zprio) < 0) ? (-1 * ((_zprio) + 1)) : (CONFIG_NUM_PREEMPT_PRIORITIES - (_zprio)-1))
@@ -155,7 +158,7 @@ struct posix_thread *to_posix_thread(pthread_t pthread)
 	}
 
 	if (bit >= ARRAY_SIZE(posix_thread_pool)) {
-		LOG_DBG("Invalid pthread (%x)", pthread);
+		LOG_DBG("Invalid pthread (%x) bit: %x, pool size: %x, %x", pthread, bit, ARRAY_SIZE(posix_thread_pool), k_current_get());
 		return NULL;
 	}
 
@@ -563,6 +566,7 @@ static void posix_thread_recycle(void)
 
 	SYS_DLIST_FOR_EACH_CONTAINER(&recyclables, t, q_node) {
 		if (t->attr.caller_destroys) {
+			LOG_DBG("recycle caller destroys");
 			t->attr = (struct posix_thread_attr){0};
 		} else {
 			(void)pthread_attr_destroy((pthread_attr_t *)&t->attr);
@@ -961,6 +965,11 @@ int pthread_attr_init(pthread_attr_t *_attr)
 				attr->stack);
 		}
 	}
+
+#ifdef CONFIG_SHARED_MULTI_HEAP
+	/* by default, the pthread is not allocated in spiram */
+	attr->insmh = false;
+#endif
 
 	/* caller responsible for destroying attr */
 	attr->initialized = true;
@@ -1422,7 +1431,17 @@ int pthread_attr_destroy(pthread_attr_t *_attr)
 		return EINVAL;
 	}
 
+	#ifdef CONFIG_SHARED_MULTI_HEAP
+	LOG_DBG("destroying attr %p insmh: %d", attr, attr->insmh);
+	if (attr->insmh) {
+		shared_multi_heap_free(attr->stack);
+		ret = 0;
+	} else {
+	#endif
 	ret = k_thread_stack_free(attr->stack);
+	#ifdef CONFIG_SHARED_MULTI_HEAP
+	}
+	#endif
 	if (ret == 0) {
 		LOG_DBG("Freed attr %p thread stack %zu@%p", _attr, __get_attr_stacksize(attr),
 			attr->stack);
@@ -1433,6 +1452,23 @@ int pthread_attr_destroy(pthread_attr_t *_attr)
 
 	return 0;
 }
+
+#ifdef CONFIG_SHARED_MULTI_HEAP
+/**
+ * @brief Indicate that the allocated stack is in SPIRAM.
+ */
+int pthread_attr_setinsmh(pthread_attr_t *_attr)
+{
+	struct posix_thread_attr *attr = (struct posix_thread_attr *)_attr;
+
+	if (!__attr_is_initialized(attr)) {
+		return EINVAL;
+	}
+	attr->insmh = true;
+	LOG_DBG("Set insmh true");
+	return 0;
+}
+#endif
 
 int pthread_setname_np(pthread_t thread, const char *name)
 {
