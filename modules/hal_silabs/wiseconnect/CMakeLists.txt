@@ -48,6 +48,7 @@ zephyr_include_directories(
   ${WISECONNECT_DIR}/components/device/silabs/si91x/mcu/drivers/cmsis_driver/config
   ${WISECONNECT_DIR}/components/device/silabs/si91x/mcu/drivers/cmsis_driver
   ${WISECONNECT_DIR}/components/device/silabs/si91x/mcu/drivers/cmsis_driver/CMSIS/Driver/Include
+  ${WISECONNECT_DIR}/components/device/silabs/si91x/mcu/hal/inc
   ${WISECONNECT_DIR}/components/device/silabs/si91x/wireless/ahb_interface/inc
   ${WISECONNECT_DIR}/components/device/silabs/si91x/wireless/firmware_upgrade
 )
@@ -73,6 +74,7 @@ zephyr_library_sources(
   ${WISECONNECT_DIR}/components/device/silabs/si91x/mcu/drivers/unified_api/src/sl_si91x_driver_gpio.c
   ${WISECONNECT_DIR}/components/device/silabs/si91x/mcu/drivers/unified_api/src/sl_si91x_pwm.c
   ${WISECONNECT_DIR}/components/device/silabs/si91x/mcu/drivers/unified_peripheral_drivers/src/sl_si91x_peripheral_gpio.c
+  ${WISECONNECT_DIR}/components/device/silabs/si91x/mcu/hal/src/sl_si91x_hal_soc_soft_reset.c
   ${WISECONNECT_DIR}/components/device/silabs/si91x/mcu/core/chip/src/iPMU_prog/iPMU_dotc/ipmu_apis.c
   ${WISECONNECT_DIR}/components/device/silabs/si91x/mcu/core/chip/src/iPMU_prog/iPMU_dotc/rsi_system_config_917.c
 )
@@ -152,7 +154,7 @@ if(CONFIG_BT_SILABS_SIWX91X)
   )
 endif() # CONFIG_BT_SILABS_SIWX91X
 
-if(CONFIG_WISECONNECT_NETWORK_STACK)
+if(CONFIG_SILABS_SIWX91X_NWP)
   zephyr_compile_definitions(
     SLI_SI91X_ENABLE_OS
     SL_SI91X_SI917_RAM_MEM_CONFIG=2
@@ -192,7 +194,11 @@ if(CONFIG_WISECONNECT_NETWORK_STACK)
     ${WISECONNECT_DIR}/components/sli_si91x_wifi_event_handler/src/sli_si91x_wifi_event_handler.c
     ${WISECONNECT_DIR}/components/sli_wifi_command_engine/src/sli_wifi_command_engine.c
   )
-endif() # CONFIG_WISECONNECT_NETWORK_STACK
+  zephyr_library_sources_ifdef(CONFIG_SIWX91X_FIRMWARE_UPGRADE
+    ${WISECONNECT_DIR}/components/device/silabs/si91x/wireless/firmware_upgrade/firmware_upgradation.c
+  )
+  zephyr_include_directories(.)
+endif() # CONFIG_SILABS_SIWX91X_NWP
 
 if(CONFIG_SOC_SILABS_SLEEPTIMER)
   zephyr_include_directories(
