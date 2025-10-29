@@ -125,6 +125,12 @@ config SYS_HEAP_AUTO
 
 endchoice
 
+config SYS_HEAP_SEMAPHORE
+	bool "Heap semaphore for concurrent operations"
+	help
+	  Enables a heap_sem semaphore that protects against unintended
+	  behavior when concurrently allocating/freeing.
+
 config MULTI_HEAP
 	bool "Multi-heap manager"
 	help

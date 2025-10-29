@@ -12,6 +12,9 @@
 #ifdef CONFIG_MSAN
 #include <sanitizer/msan_interface.h>
 #endif
+#ifdef CONFIG_SYS_HEAP_SEMAPHORE
+K_SEM_DEFINE(heap_sem, 1, 1);
+#endif
 
 #ifdef CONFIG_SYS_HEAP_RUNTIME_STATS
 static inline void increase_allocated_bytes(struct z_heap *h, size_t num_bytes)
@@ -165,6 +168,9 @@ void sys_heap_free(struct sys_heap *heap, void *mem)
 	if (mem == NULL) {
 		return; /* ISO C free() semantics */
 	}
+#ifdef CONFIG_SYS_HEAP_SEMAPHORE
+	k_sem_take(&heap_sem, K_FOREVER);
+#endif
 	struct z_heap *h = heap->heap;
 	chunkid_t c = mem_to_chunkid(h, mem);
 
@@ -195,6 +201,9 @@ void sys_heap_free(struct sys_heap *heap, void *mem)
 #endif
 
 	free_chunk(h, c);
+#ifdef CONFIG_SYS_HEAP_SEMAPHORE
+	k_sem_give(&heap_sem);
+#endif
 }
 
 size_t sys_heap_usable_size(struct sys_heap *heap, void *mem)
@@ -268,11 +277,16 @@ void *sys_heap_alloc(struct sys_heap *heap, size_t bytes)
 	if (bytes == 0U) {
 		return NULL;
 	}
-
+#ifdef CONFIG_SYS_HEAP_SEMAPHORE
+	k_sem_take(&heap_sem, K_FOREVER);
+#endif
 	chunksz_t chunk_sz = bytes_to_chunksz(h, bytes, 0);
 	chunkid_t c = alloc_chunk(h, chunk_sz);
 
 	if (c == 0U) {
+#ifdef CONFIG_HEAP_SEMAPHORE
+		k_sem_give(&heap_sem);
+#endif
 		return NULL;
 	}
 
@@ -296,6 +310,9 @@ void *sys_heap_alloc(struct sys_heap *heap, size_t bytes)
 #endif
 
 	IF_ENABLED(CONFIG_MSAN, (__msan_allocated_memory(mem, bytes)));
+#ifdef CONFIG_SYS_HEAP_SEMAPHORE
+	k_sem_give(&heap_sem);
+#endif
 	return mem;
 }
 
@@ -334,7 +351,9 @@ void *sys_heap_aligned_alloc(struct sys_heap *heap, size_t align, size_t bytes)
 	if (bytes == 0) {
 		return NULL;
 	}
-
+#ifdef CONFIG_SYS_HEAP_SEMAPHORE
+	k_sem_take(&heap_sem, K_FOREVER);
+#endif
 	/*
 	 * Find a free block that is guaranteed to fit.
 	 * We over-allocate to account for alignment and then free
@@ -344,6 +363,10 @@ void *sys_heap_aligned_alloc(struct sys_heap *heap, size_t align, size_t bytes)
 	chunkid_t c0 = alloc_chunk(h, padded_sz);
 
 	if (c0 == 0) {
+#ifdef CONFIG_HEAP_SEMAPHORE
+		k_sem_give(&heap_sem);
+// LOG_INF("Heap semaphore given: sys_heap_aligned_alloc");
+#endif
 		return NULL;
 	}
 	uint8_t *mem = chunk_mem(h, c0);
@@ -381,11 +404,17 @@ void *sys_heap_aligned_alloc(struct sys_heap *heap, size_t align, size_t bytes)
 #endif
 
 	IF_ENABLED(CONFIG_MSAN, (__msan_allocated_memory(mem, bytes)));
+#ifdef CONFIG_SYS_HEAP_SEMAPHORE
+	k_sem_give(&heap_sem);
+#endif
 	return mem;
 }
 
 static bool inplace_realloc(struct sys_heap *heap, void *ptr, size_t bytes)
 {
+#ifdef CONFIG_HEAP_SEMAPHORE
+	k_sem_take(&heap_sem, K_FOREVER);
+#endif
 	struct z_heap *h = heap->heap;
 
 	chunkid_t c = mem_to_chunkid(h, ptr);
@@ -395,6 +424,9 @@ static bool inplace_realloc(struct sys_heap *heap, void *ptr, size_t bytes)
 
 	if (chunk_size(h, c) == chunks_need) {
 		/* We're good already */
+#ifdef CONFIG_HEAP_SEMAPHORE
+		k_sem_give(&heap_sem);
+#endif
 		return true;
 	}
 
@@ -419,7 +451,9 @@ static bool inplace_realloc(struct sys_heap *heap, void *ptr, size_t bytes)
 		heap_listener_notify_free(HEAP_ID_FROM_POINTER(heap), ptr,
 					  bytes_freed);
 #endif
-
+#ifdef CONFIG_HEAP_SEMAPHORE
+		k_sem_give(&heap_sem);
+#endif
 		return true;
 	}
 
@@ -454,10 +488,14 @@ static bool inplace_realloc(struct sys_heap *heap, void *ptr, size_t bytes)
 		heap_listener_notify_free(HEAP_ID_FROM_POINTER(heap), ptr,
 					  bytes_freed);
 #endif
-
+#ifdef CONFIG_HEAP_SEMAPHORE
+		k_sem_give(&heap_sem);
+#endif
 		return true;
 	}
-
+#ifdef CONFIG_HEAP_SEMAPHORE
+	k_sem_give(&heap_sem);
+#endif
 	return false;
 }
 
