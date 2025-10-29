@@ -176,6 +176,8 @@ void shared_multi_heap_free(void *block);
  */
 int shared_multi_heap_add(struct shared_multi_heap_region *region, void *user_data);
 
+void *shared_multi_heap_realloc(enum shared_multi_heap_attr attr, void *ptr, size_t bytes);
+
 /**
  * @}
  */
